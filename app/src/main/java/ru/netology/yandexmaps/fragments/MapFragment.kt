@@ -5,26 +5,26 @@ import android.view.*
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.fragment.findNavController
 import com.yandex.mapkit.Animation
 import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.layers.GeoObjectTapListener
 import com.yandex.mapkit.map.CameraPosition
 import com.yandex.mapkit.map.MapObjectTapListener
-import com.yandex.mapkit.mapview.MapView
 import com.yandex.runtime.ui_view.ViewProvider
+import ru.netology.yandexmaps.BuildConfig
 import ru.netology.yandexmaps.R
 import ru.netology.yandexmaps.databinding.FragmentMapBinding
 import ru.netology.yandexmaps.viewmodel.MapPointsViewModel
-import java.util.*
 
 
 class MapFragment : Fragment() {
     private val viewModel: MapPointsViewModel by viewModels(
         ownerProducer = ::requireParentFragment
     )
-
-    private lateinit var mapviewElement: MapView
 
     //Свойство добавлено, чтобы спасти Listener от сборщика мусора
     private lateinit var geoObjectTapListener: GeoObjectTapListener
@@ -33,14 +33,7 @@ class MapFragment : Fragment() {
         super.onCreate(savedInstanceState)
         setHasOptionsMenu(true)
 
-        val properties = Properties()
-        val am = requireContext().assets
-        val inputStream = am.open("maps.properties")
-        properties.load(inputStream)
-
-        val myApiKey = properties.getProperty("MAPS_API_KEY")
-            ?: throw RuntimeException("Can't get API_KEY for maps")
-        MapKitFactory.setApiKey(myApiKey)
+        MapKitFactory.setApiKey(BuildConfig.MAPS_API_KEY)
         MapKitFactory.initialize(requireContext())
     }
 
@@ -54,7 +47,23 @@ class MapFragment : Fragment() {
             false
         )
         with(binding) {
-            mapviewElement = mapview
+            viewLifecycleOwner.lifecycle.addObserver(object : LifecycleEventObserver {
+                override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+                    when (event) {
+                        Lifecycle.Event.ON_START -> {
+                            mapview.onStart()
+                            MapKitFactory.getInstance().onStart()
+                        }
+                        Lifecycle.Event.ON_STOP -> {
+                            mapview.onStop()
+                            MapKitFactory.getInstance().onStop()
+                        }
+                        Lifecycle.Event.ON_DESTROY -> source.lifecycle.removeObserver(this)
+                        else -> Unit
+                    }
+                }
+            })
+
             mapview.map.move(
                 CameraPosition(viewModel.currentPosition, 11.0f, 0.0f, 0.0f),
                 Animation(Animation.Type.SMOOTH, 0f),
@@ -118,17 +127,5 @@ class MapFragment : Fragment() {
             }
             else -> super.onOptionsItemSelected(item)
         }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        mapviewElement.onStop()
-        MapKitFactory.getInstance().onStop()
-    }
-
-    override fun onStart() {
-        super.onStart()
-        mapviewElement.onStart()
-        MapKitFactory.getInstance().onStart()
     }
 }
